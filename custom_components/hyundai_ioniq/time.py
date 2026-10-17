@@ -27,9 +27,8 @@ class HyundaiKiaTimeDescription(TimeEntityDescription):
 
     value_fn: Callable[[Vehicle], dt.time | None]
     exists_fn: Callable[[Vehicle], bool]
-    set_fn: Callable[
-        [HyundaiKiaConnectDataUpdateCoordinator, str, dt.time], Awaitable[None]
-    ]
+    # Schedule field this entity stages until the send button is pressed.
+    pending_field: str
 
 
 TIME_DESCRIPTIONS: Final[tuple[HyundaiKiaTimeDescription, ...]] = (
@@ -39,9 +38,7 @@ TIME_DESCRIPTIONS: Final[tuple[HyundaiKiaTimeDescription, ...]] = (
         icon="mdi:clock-time-ten",
         value_fn=lambda vehicle: vehicle.ev_off_peak_start_time,
         exists_fn=lambda vehicle: vehicle.ev_off_peak_start_time is not None,
-        set_fn=lambda coordinator, vid, value: coordinator.async_set_off_peak_charging(
-            vid, start=value
-        ),
+        pending_field="off_peak_start_time",
     ),
     HyundaiKiaTimeDescription(
         key="ev_off_peak_end_time",
@@ -49,9 +46,7 @@ TIME_DESCRIPTIONS: Final[tuple[HyundaiKiaTimeDescription, ...]] = (
         icon="mdi:clock-time-two",
         value_fn=lambda vehicle: vehicle.ev_off_peak_end_time,
         exists_fn=lambda vehicle: vehicle.ev_off_peak_end_time is not None,
-        set_fn=lambda coordinator, vid, value: coordinator.async_set_off_peak_charging(
-            vid, end=value
-        ),
+        pending_field="off_peak_end_time",
     ),
 )
 
@@ -97,10 +92,16 @@ class HyundaiKiaConnectTimeEntity(TimeEntity, HyundaiKiaConnectEntity):
 
     @property
     def native_value(self) -> dt.time | None:
-        """Return the configured time."""
-        return self.entity_description.value_fn(self.vehicle)
+        """Return the staged time if one is pending, else the vehicle's time."""
+        return self.coordinator.get_pending_schedule_value(
+            self.vehicle.id,
+            self.entity_description.pending_field,
+            self.entity_description.value_fn(self.vehicle),
+        )
 
     async def async_set_value(self, value: dt.time) -> None:
-        """Set a new off-peak time."""
-        await self.entity_description.set_fn(self.coordinator, self.vehicle.id, value)
+        """Stage a new off-peak time. It is sent with the send button."""
+        self.coordinator.stage_schedule_change(
+            self.vehicle.id, **{self.entity_description.pending_field: value}
+        )
         self.async_write_ha_state()

@@ -835,6 +835,9 @@
       },
       "capture_svm_image": {
         "name": "Capturer une image SVM"
+      },
+      "send_schedule": {
+        "name": "Envoyer les réglages de charge"
       }
     },
     "image": {

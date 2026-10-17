@@ -95,6 +95,16 @@ BUTTON_DESCRIPTIONS: Final[tuple[HyundaiKiaButtonDescription, ...]] = (
         ),
     ),
     HyundaiKiaButtonDescription(
+        key="send_schedule",
+        translation_key="send_schedule",
+        icon="mdi:send-check",
+        press_action="async_send_pending_schedule",
+        exists_fn=lambda vehicle: (
+            vehicle.ev_off_peak_start_time is not None
+            or vehicle.ev_schedule_charge_enabled is not None
+        ),
+    ),
+    HyundaiKiaButtonDescription(
         key="capture_svm_image",
         translation_key="capture_svm_image",
         icon="mdi:camera-iris",

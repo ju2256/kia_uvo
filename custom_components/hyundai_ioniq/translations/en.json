@@ -835,6 +835,9 @@
       },
       "capture_svm_image": {
         "name": "Capture SVM Image"
+      },
+      "send_schedule": {
+        "name": "Send charge schedule changes"
       }
     },
     "image": {

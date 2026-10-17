@@ -73,6 +73,8 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
         """Initialize."""
         self.platforms: set[str] = set()
         self._action_lock = asyncio.Lock()
+        # Charge-schedule changes staged in HA, sent together by the send button.
+        self._pending_schedule: dict[str, dict[str, Any]] = {}
         self._svm_details: dict[str, SVMDetails] = {}
         # Per-vehicle SVM fisheye dewarp toggle (local UI state, off by default).
         self._svm_dewarp: dict[str, bool] = {}
@@ -532,6 +534,36 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
             temperature_unit=vehicle._ev_first_departure_climate_temperature_unit or 0,
             defrost=vehicle.ev_first_departure_climate_defrost or False,
         )
+
+    def get_pending_schedule_value(self, vehicle_id: str, field: str, current: Any) -> Any:
+        """Return the staged value for a schedule field, or the current one."""
+        return self._pending_schedule.get(vehicle_id, {}).get(field, current)
+
+    def stage_schedule_change(self, vehicle_id: str, **changes: Any) -> None:
+        """Stage schedule changes locally. Nothing is sent until the send button."""
+        self._pending_schedule.setdefault(vehicle_id, {}).update(changes)
+        self.async_update_listeners()
+
+    async def async_send_pending_schedule(self, vehicle_id: str) -> None:
+        """Send every staged schedule change in a single request."""
+        changes = self._pending_schedule.get(vehicle_id)
+        if not changes:
+            raise HomeAssistantError("No pending charge schedule changes to send.")
+        vehicle = self.vehicle_manager.vehicles[vehicle_id]
+        options = self._build_schedule_options_from_vehicle(vehicle)
+        if "charging_enabled" in changes:
+            options.charging_enabled = changes["charging_enabled"]
+        if "off_peak_charge_only_enabled" in changes:
+            options.off_peak_charge_only_enabled = changes["off_peak_charge_only_enabled"]
+        if "off_peak_start_time" in changes:
+            options.off_peak_start_time = changes["off_peak_start_time"]
+        if "off_peak_end_time" in changes:
+            options.off_peak_end_time = changes["off_peak_end_time"]
+        # Pending changes are cleared only after the request succeeds, so a
+        # failed send keeps them for a retry.
+        await self.async_schedule_charging_and_climate(vehicle_id, options)
+        self._pending_schedule.pop(vehicle_id, None)
+        self.async_update_listeners()
 
     async def async_set_schedule_charge_enabled(
         self, vehicle_id: str, enabled: bool

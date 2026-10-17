@@ -30,6 +30,8 @@ class HyundaiKiaSwitchDescription(SwitchEntityDescription):
     exists_fn: Callable[[Vehicle], bool]
     on_fn: Callable[[HyundaiKiaConnectDataUpdateCoordinator, str], Awaitable[None]]
     off_fn: Callable[[HyundaiKiaConnectDataUpdateCoordinator, str], Awaitable[None]]
+    # When set, on/off stage this schedule field instead of sending a command.
+    pending_field: str | None = None
 
 
 SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
@@ -145,6 +147,7 @@ SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
         icon="mdi:calendar-clock",
         value_fn=lambda vehicle: vehicle.ev_schedule_charge_enabled,
         exists_fn=lambda vehicle: vehicle.ev_schedule_charge_enabled is not None,
+        pending_field="charging_enabled",
         on_fn=lambda coordinator, vid: coordinator.async_set_schedule_charge_enabled(
             vid, True
         ),
@@ -158,6 +161,7 @@ SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
         icon="mdi:clock-outline",
         value_fn=lambda vehicle: vehicle.ev_off_peak_charge_only_enabled,
         exists_fn=lambda vehicle: vehicle.ev_off_peak_charge_only_enabled is not None,
+        pending_field="off_peak_charge_only_enabled",
         on_fn=lambda coordinator, vid: (
             coordinator.async_set_off_peak_charge_only_enabled(vid, True)
         ),
@@ -232,14 +236,30 @@ class HyundaiKiaConnectSwitch(SwitchEntity, HyundaiKiaConnectEntity):
     @property
     def is_on(self) -> bool | None:
         """Return True if the switch is on."""
-        return self.entity_description.value_fn(self.vehicle)
+        current = self.entity_description.value_fn(self.vehicle)
+        field = self.entity_description.pending_field
+        if field is not None:
+            return self.coordinator.get_pending_schedule_value(
+                self.vehicle.id, field, current
+            )
+        return current
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
+        if self.entity_description.pending_field is not None:
+            self.coordinator.stage_schedule_change(
+                self.vehicle.id, **{self.entity_description.pending_field: True}
+            )
+            return
         await self.entity_description.on_fn(self.coordinator, self.vehicle.id)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
+        if self.entity_description.pending_field is not None:
+            self.coordinator.stage_schedule_change(
+                self.vehicle.id, **{self.entity_description.pending_field: False}
+            )
+            return
         await self.entity_description.off_fn(self.coordinator, self.vehicle.id)
 
 
