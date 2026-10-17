@@ -1,0 +1,13 @@
+{
+  "domain": "hyundai_ioniq",
+  "name": "Hyundai Ioniq (Bluelink)",
+  "codeowners": ["@fuatakgun"],
+  "config_flow": true,
+  "documentation": "https://github.com/ju2256/kia_uvo",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/ju2256/kia_uvo/issues",
+  "loggers": ["hyundai_ioniq", "hyundai_kia_connect_api"],
+  "requirements": ["hyundai_kia_connect_api[image]==4.36.1"],
+  "version": "3.18.0"
+}
