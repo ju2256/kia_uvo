@@ -583,7 +583,7 @@
         "name": "EV Scheduled Departure 2"
       },
       "ev_off_peak_charge_only_enabled": {
-        "name": "Off-peak charge only"
+        "name": "Off-peak charge only (non vérifié)"
       },
       "ev_schedule_charge_enabled": {
         "name": "Scheduled charging"

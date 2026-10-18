@@ -610,7 +610,6 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
 
         schedule_fields = {
             "charging_enabled",
-            "off_peak_charge_only_enabled",
             "off_peak_start_time",
             "off_peak_end_time",
             "first_departure_enabled",
@@ -625,10 +624,6 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
             options = self._build_schedule_options_from_vehicle(vehicle)
             if "charging_enabled" in changes:
                 options.charging_enabled = changes["charging_enabled"]
-            if "off_peak_charge_only_enabled" in changes:
-                options.off_peak_charge_only_enabled = changes[
-                    "off_peak_charge_only_enabled"
-                ]
             if "off_peak_start_time" in changes:
                 options.off_peak_start_time = changes["off_peak_start_time"]
             if "off_peak_end_time" in changes:

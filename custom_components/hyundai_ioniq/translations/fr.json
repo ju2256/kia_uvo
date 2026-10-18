@@ -900,7 +900,7 @@
         "name": "Départ programmé EV 2"
       },
       "ev_off_peak_charge_only_enabled": {
-        "name": "Charge en heures creuses uniquement"
+        "name": "Charge en heures creuses uniquement (non vérifié)"
       },
       "ev_schedule_charge_enabled": {
         "name": "Charge programmée"

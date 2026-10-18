@@ -11,6 +11,7 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from hyundai_kia_connect_api import Vehicle
@@ -20,6 +21,15 @@ from .coordinator import HyundaiKiaConnectDataUpdateCoordinator
 from .entity import HyundaiKiaConnectEntity
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _unverified_off_peak_only(
+    coordinator: HyundaiKiaConnectDataUpdateCoordinator, vehicle_id: str
+) -> None:
+    """Refuse to send off-peak-only: the official app does not expose it, so the car's behaviour is unverified."""
+    raise HomeAssistantError(
+        "Off-peak charge only is unverified and is not sent to the vehicle."
+    )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -167,13 +177,8 @@ SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
         icon="mdi:clock-outline",
         value_fn=lambda vehicle: vehicle.ev_off_peak_charge_only_enabled,
         exists_fn=lambda vehicle: vehicle.ev_off_peak_charge_only_enabled is not None,
-        pending_field="off_peak_charge_only_enabled",
-        on_fn=lambda coordinator, vid: (
-            coordinator.async_set_off_peak_charge_only_enabled(vid, True)
-        ),
-        off_fn=lambda coordinator, vid: (
-            coordinator.async_set_off_peak_charge_only_enabled(vid, False)
-        ),
+        on_fn=_unverified_off_peak_only,
+        off_fn=_unverified_off_peak_only,
     ),
     HyundaiKiaSwitchDescription(
         key="ev_charge_port_door_is_open",
