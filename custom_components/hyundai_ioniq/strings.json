@@ -520,7 +520,7 @@
         "name": "Capture SVM Image"
       },
       "send_schedule": {
-        "name": "Send charge schedule changes"
+        "name": "Send settings"
       }
     },
     "image": {

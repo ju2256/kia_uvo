@@ -80,6 +80,13 @@ async def async_setup_entry(
 PARALLEL_UPDATES = 1
 
 
+_PENDING_FIELD_BY_KEY: dict[str, str] = {
+    AC_CHARGING_LIMIT_KEY: "ac_limit",
+    DC_CHARGING_LIMIT_KEY: "dc_limit",
+    V2L_LIMIT_KEY: "v2l_limit",
+}
+
+
 class HyundaiKiaConnectNumber(NumberEntity, HyundaiKiaConnectEntity):
     """Charge limit or V2L limit slider."""
 
@@ -100,8 +107,17 @@ class HyundaiKiaConnectNumber(NumberEntity, HyundaiKiaConnectEntity):
 
     @property
     def native_value(self) -> float | None:
-        """Return the entity value to represent the entity state."""
-        return cast(float | None, getattr(self.vehicle, self._key))
+        """Return the staged value if pending, else the vehicle's value."""
+        current = cast(float | None, getattr(self.vehicle, self._key))
+        field = _PENDING_FIELD_BY_KEY.get(self._key)
+        if field is not None:
+            return cast(
+                float | None,
+                self.coordinator.get_pending_schedule_value(
+                    self.vehicle.id, field, current
+                ),
+            )
+        return current
 
     @staticmethod
     def _is_valid_charge_limit(val: float | None) -> bool:
@@ -109,7 +125,15 @@ class HyundaiKiaConnectNumber(NumberEntity, HyundaiKiaConnectEntity):
         return isinstance(val, (int, float)) and int(val) in range(50, 101, 10)
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set new charging limit."""
+        """Stage the new value. It is sent with the send button."""
+        field = _PENDING_FIELD_BY_KEY.get(self._key)
+        if field is not None:
+            self.coordinator.stage_schedule_change(
+                self.vehicle.id, **{field: int(value)}
+            )
+            self.async_write_ha_state()
+            return
+
         if (
             self.entity_description.key == AC_CHARGING_LIMIT_KEY
             and self.vehicle.ev_charge_limits_ac == int(value)

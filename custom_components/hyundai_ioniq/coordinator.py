@@ -544,25 +544,87 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
         self._pending_schedule.setdefault(vehicle_id, {}).update(changes)
         self.async_update_listeners()
 
-    async def async_send_pending_schedule(self, vehicle_id: str) -> None:
-        """Send every staged schedule change in a single request."""
+    async def async_send_pending_settings(self, vehicle_id: str) -> None:
+        """Send every staged setting for a vehicle, with as few requests as possible.
+
+        Schedule fields (charging, off-peak, departures) go in one schedule
+        request. Charge limits and V2L go in their own commands afterwards.
+        Each group is cleared only after its own request succeeds, so a failure
+        leaves the remaining settings staged for a retry.
+        """
         changes = self._pending_schedule.get(vehicle_id)
         if not changes:
-            raise HomeAssistantError("No pending charge schedule changes to send.")
-        vehicle = self.vehicle_manager.vehicles[vehicle_id]
-        options = self._build_schedule_options_from_vehicle(vehicle)
-        if "charging_enabled" in changes:
-            options.charging_enabled = changes["charging_enabled"]
-        if "off_peak_charge_only_enabled" in changes:
-            options.off_peak_charge_only_enabled = changes["off_peak_charge_only_enabled"]
-        if "off_peak_start_time" in changes:
-            options.off_peak_start_time = changes["off_peak_start_time"]
-        if "off_peak_end_time" in changes:
-            options.off_peak_end_time = changes["off_peak_end_time"]
-        # Pending changes are cleared only after the request succeeds, so a
-        # failed send keeps them for a retry.
-        await self.async_schedule_charging_and_climate(vehicle_id, options)
-        self._pending_schedule.pop(vehicle_id, None)
+            raise HomeAssistantError("No pending settings to send.")
+
+        schedule_fields = {
+            "charging_enabled",
+            "off_peak_charge_only_enabled",
+            "off_peak_start_time",
+            "off_peak_end_time",
+            "first_departure_enabled",
+            "second_departure_enabled",
+            "first_departure_climate_enabled",
+            "second_departure_climate_enabled",
+            "first_departure_defrost",
+            "second_departure_defrost",
+        }
+        if changes.keys() & schedule_fields:
+            vehicle = self.vehicle_manager.vehicles[vehicle_id]
+            options = self._build_schedule_options_from_vehicle(vehicle)
+            if "charging_enabled" in changes:
+                options.charging_enabled = changes["charging_enabled"]
+            if "off_peak_charge_only_enabled" in changes:
+                options.off_peak_charge_only_enabled = changes[
+                    "off_peak_charge_only_enabled"
+                ]
+            if "off_peak_start_time" in changes:
+                options.off_peak_start_time = changes["off_peak_start_time"]
+            if "off_peak_end_time" in changes:
+                options.off_peak_end_time = changes["off_peak_end_time"]
+            if "first_departure_enabled" in changes:
+                options.first_departure.enabled = changes["first_departure_enabled"]
+            if "second_departure_enabled" in changes:
+                options.second_departure.enabled = changes["second_departure_enabled"]
+            # Same climate/defrost mapping as the direct departure setters.
+            if "first_departure_climate_enabled" in changes:
+                options.climate_enabled = changes["first_departure_climate_enabled"]
+            if "second_departure_climate_enabled" in changes:
+                options.climate_enabled = changes["second_departure_climate_enabled"]
+            if "first_departure_defrost" in changes:
+                options.defrost = changes["first_departure_defrost"]
+            if "second_departure_defrost" in changes:
+                options.defrost = changes["second_departure_defrost"]
+            # A departure slot only takes effect when scheduled charging is on.
+            if (
+                changes.get("first_departure_enabled")
+                or changes.get("second_departure_enabled")
+            ) and not options.charging_enabled:
+                options.charging_enabled = True
+            await self.async_schedule_charging_and_climate(vehicle_id, options)
+            for field in schedule_fields:
+                changes.pop(field, None)
+
+        if changes.keys() & {"ac_limit", "dc_limit"}:
+            vehicle = self.vehicle_manager.vehicles[vehicle_id]
+            ac = changes.get("ac_limit", vehicle.ev_charge_limits_ac)
+            dc = changes.get("dc_limit", vehicle.ev_charge_limits_dc)
+            if not all(
+                isinstance(v, (int, float)) and int(v) in range(50, 101, 10)
+                for v in (ac, dc)
+            ):
+                raise HomeAssistantError(
+                    "Charge limits are not available yet. Try a force refresh first."
+                )
+            await self.async_set_charge_limits(vehicle_id, int(ac), int(dc))
+            changes.pop("ac_limit", None)
+            changes.pop("dc_limit", None)
+
+        if "v2l_limit" in changes:
+            await self.async_set_v2l_limit(vehicle_id, int(changes["v2l_limit"]))
+            changes.pop("v2l_limit", None)
+
+        if not changes:
+            self._pending_schedule.pop(vehicle_id, None)
         self.async_update_listeners()
 
     async def async_set_schedule_charge_enabled(

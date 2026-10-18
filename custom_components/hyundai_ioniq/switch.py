@@ -60,6 +60,7 @@ SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
         icon="mdi:clock-outline",
         value_fn=lambda vehicle: vehicle.ev_first_departure_enabled,
         exists_fn=lambda vehicle: vehicle.ev_first_departure_enabled is not None,
+        pending_field="first_departure_enabled",
         on_fn=lambda coordinator, vid: coordinator.async_set_departure_enabled(
             vid, 1, True
         ),
@@ -73,6 +74,7 @@ SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
         icon="mdi:clock-outline",
         value_fn=lambda vehicle: vehicle.ev_second_departure_enabled,
         exists_fn=lambda vehicle: vehicle.ev_second_departure_enabled is not None,
+        pending_field="second_departure_enabled",
         on_fn=lambda coordinator, vid: coordinator.async_set_departure_enabled(
             vid, 2, True
         ),
@@ -88,6 +90,7 @@ SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
         exists_fn=lambda vehicle: (
             vehicle.ev_first_departure_climate_enabled is not None
         ),
+        pending_field="first_departure_climate_enabled",
         on_fn=lambda coordinator, vid: coordinator.async_set_departure_climate_enabled(
             vid, 1, True
         ),
@@ -103,6 +106,7 @@ SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
         exists_fn=lambda vehicle: (
             vehicle.ev_second_departure_climate_enabled is not None
         ),
+        pending_field="second_departure_climate_enabled",
         on_fn=lambda coordinator, vid: coordinator.async_set_departure_climate_enabled(
             vid, 2, True
         ),
@@ -118,6 +122,7 @@ SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
         exists_fn=lambda vehicle: (
             vehicle.ev_first_departure_climate_defrost is not None
         ),
+        pending_field="first_departure_defrost",
         on_fn=lambda coordinator, vid: coordinator.async_set_departure_defrost(
             vid, 1, True
         ),
@@ -133,6 +138,7 @@ SWITCH_DESCRIPTIONS: Final[tuple[HyundaiKiaSwitchDescription, ...]] = (
         exists_fn=lambda vehicle: (
             vehicle.ev_second_departure_climate_defrost is not None
         ),
+        pending_field="second_departure_defrost",
         on_fn=lambda coordinator, vid: coordinator.async_set_departure_defrost(
             vid, 2, True
         ),
