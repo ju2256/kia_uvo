@@ -586,6 +586,9 @@
       },
       "svm_status": {
         "name": "SVM Status"
+      },
+      "last_action": {
+        "name": "Last action result"
       }
     },
     "binary_sensor": {

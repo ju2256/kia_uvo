@@ -75,6 +75,8 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
         self._action_lock = asyncio.Lock()
         # Charge-schedule changes staged in HA, sent together by the send button.
         self._pending_schedule: dict[str, dict[str, Any]] = {}
+        # Last result of a command per vehicle, shown by the last-action sensor.
+        self._last_action_results: dict[str, dict[str, Any]] = {}
         self._svm_details: dict[str, SVMDetails] = {}
         # Per-vehicle SVM fisheye dewarp toggle (local UI state, off by default).
         self._svm_dewarp: dict[str, bool] = {}
@@ -393,10 +395,14 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
             try:
                 action_id = await self.hass.async_add_executor_job(action_fn)
             except UnsupportedControlError as err:
+                self._record_action_result(
+                    vehicle_id, error_label, "error", f"Not supported: {err}"
+                )
                 raise HomeAssistantError(
                     f"Vehicle does not support this action: {err}"
                 ) from err
             except Exception as err:
+                self._record_action_result(vehicle_id, error_label, "error", str(err))
                 raise HomeAssistantError(f"Failed to {error_label}: {err}") from err
             try:
                 if force_refresh:
@@ -409,6 +415,16 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
                 _LOGGER.exception(
                     "Action '%s' was sent but confirmation polling failed",
                     error_label,
+                )
+                self._record_action_result(
+                    vehicle_id,
+                    error_label,
+                    "pending",
+                    "Sent, but confirmation was not received",
+                )
+            else:
+                self._record_action_result(
+                    vehicle_id, error_label, "success", f"Accepted (action {action_id})"
                 )
 
     async def async_lock_vehicle(self, vehicle_id: str) -> None:
@@ -535,6 +551,22 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
             defrost=vehicle.ev_first_departure_climate_defrost or False,
         )
 
+    def get_last_action_result(self, vehicle_id: str) -> dict[str, Any] | None:
+        """Return the last command result for a vehicle, if any."""
+        return self._last_action_results.get(vehicle_id)
+
+    def _record_action_result(
+        self, vehicle_id: str, action: str, status: str, message: str
+    ) -> None:
+        """Store the outcome of a command so it can be shown in HA."""
+        self._last_action_results[vehicle_id] = {
+            "action": action,
+            "status": status,
+            "message": message,
+            "time": dt_util.now().isoformat(),
+        }
+        self.async_update_listeners()
+
     def get_pending_schedule_value(self, vehicle_id: str, field: str, current: Any) -> Any:
         """Return the staged value for a schedule field, or the current one."""
         return self._pending_schedule.get(vehicle_id, {}).get(field, current)
@@ -545,6 +577,20 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
         self.async_update_listeners()
 
     async def async_send_pending_settings(self, vehicle_id: str) -> None:
+        """Send staged settings and record the overall result."""
+        try:
+            await self._apply_pending_settings(vehicle_id)
+        except HomeAssistantError as err:
+            self._record_action_result(vehicle_id, "send settings", "error", str(err))
+            raise
+        except Exception as err:
+            self._record_action_result(vehicle_id, "send settings", "error", str(err))
+            raise HomeAssistantError(f"Failed to send settings: {err}") from err
+        self._record_action_result(
+            vehicle_id, "send settings", "success", "Settings sent"
+        )
+
+    async def _apply_pending_settings(self, vehicle_id: str) -> None:
         """Send every staged setting for a vehicle, with as few requests as possible.
 
         Schedule fields (charging, off-peak, departures) go in one schedule

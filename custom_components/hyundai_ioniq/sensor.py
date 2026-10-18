@@ -606,6 +606,7 @@ async def async_setup_entry(
         entities.append(
             VehicleEntity(coordinator, coordinator.vehicle_manager.vehicles[vehicle_id])
         )
+        entities.append(LastActionSensor(coordinator, vehicle))
     for vehicle_id in coordinator.vehicle_manager.vehicles:
         if await coordinator.async_supports_svm(vehicle_id):
             entities.append(
@@ -836,6 +837,35 @@ class TodaysDailyDrivingStatsEntity(SensorEntity, HyundaiKiaConnectEntity):
     def unique_id(self) -> str:
         """Return the unique ID."""
         return f"{DOMAIN}-todays-daily-driving-stats-{self.vehicle.id}"
+
+
+class LastActionSensor(SensorEntity, HyundaiKiaConnectEntity):
+    """Result of the last command or settings send, readable on a dashboard."""
+
+    _attr_translation_key = "last_action"
+    _attr_icon = "mdi:clipboard-text-clock"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: HyundaiKiaConnectDataUpdateCoordinator,
+        vehicle: Vehicle,
+    ) -> None:
+        """Initialize the last-action sensor."""
+        super().__init__(coordinator, vehicle)
+        self._attr_unique_id = f"{DOMAIN}_{vehicle.id}_last_action"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the status of the last action: success, error or pending."""
+        result = self.coordinator.get_last_action_result(self.vehicle.id)
+        return result["status"] if result else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the action name, message and time of the last action."""
+        result = self.coordinator.get_last_action_result(self.vehicle.id)
+        return dict(result) if result else {}
 
 
 class SVMStatusSensor(SensorEntity, HyundaiKiaConnectEntity):
