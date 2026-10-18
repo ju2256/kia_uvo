@@ -578,6 +578,12 @@ class HyundaiKiaConnectDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any
 
     async def async_send_pending_settings(self, vehicle_id: str) -> None:
         """Send staged settings and record the overall result."""
+        if not self._pending_schedule.get(vehicle_id):
+            # Nothing staged is not a failure: record it as info, no error.
+            self._record_action_result(
+                vehicle_id, "send settings", "info", "No pending settings to send"
+            )
+            return
         try:
             await self._apply_pending_settings(vehicle_id)
         except HomeAssistantError as err:
